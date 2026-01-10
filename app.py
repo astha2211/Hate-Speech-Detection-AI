@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import tensorflow as tf
 import pickle
-from tensorflow.keras.utils import pad_sequences
+from keras.utils import pad_sequences
 import re
 import numpy as np
 
@@ -29,9 +29,7 @@ def clean_text(text):
     text = re.sub(r"[^a-z\s]", "", text)
     text = re.sub(r'\s+', ' ', text).strip()
     return text
-@app.route('/')
-def home():
-    return "<h1>Backend is active! Open index.html to use the app.</h1>"
+
 @app.route('/predict', methods=['POST'])
 def predict():
     data = request.get_json()
