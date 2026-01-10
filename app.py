@@ -1,14 +1,16 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import tensorflow as tf
 import pickle
-from keras.utils import pad_sequences
+from tensorflow.keras.utils import pad_sequences
 import re
 import numpy as np
 
 app = Flask(__name__)
-CORS(app)  # Enable Cross-Origin Resource Sharing so frontend can talk to backend
-
+CORS(app)
+@app.route('/')
+def home():
+    return render_template('index.html')
 # --- CONFIGURATION ---
 MAX_LEN = 100  # Must match the 'max_len' used in training
 # ---------------------
