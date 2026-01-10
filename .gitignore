@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.DS_Store
+.vscode/
+# If your model file is over 100MB, uncomment the next line to ignore it:
+# *.h5
