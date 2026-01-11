@@ -1,34 +1,50 @@
+import numpy as np
+import onnxruntime as ort
+import pickle
+import re
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
-import tensorflow as tf
-import pickle
-from keras.utils import pad_sequences
-import re
-import numpy as np
 
 app = Flask(__name__)
 CORS(app)
-@app.route('/')
-def home():
-    return render_template('index.html')
-# --- CONFIGURATION ---
-MAX_LEN = 100  # Must match the 'max_len' used in training
-# ---------------------
 
-# Load Assets
-print("Loading model and tokenizer...")
-model = tf.keras.models.load_model("hate_speech_model.h5")
+# --- CONFIGURATION ---
+MAX_LEN = 100 
+
+# --- LOAD ASSETS (ONNX) ---
+print("Loading ONNX model...")
+# Load the ONNX model
+sess = ort.InferenceSession("model.onnx")
+input_name = sess.get_inputs()[0].name
+output_name = sess.get_outputs()[0].name
 
 with open('tokenizer.pickle', 'rb') as handle:
     tokenizer = pickle.load(handle)
 
+# --- HELPER FUNCTIONS ---
+
 def clean_text(text):
-    """Must match the training cleaning logic EXACTLY"""
     text = str(text).lower()
     text = re.sub(r"http\S+|www\S+|@\w+|#\w+", "", text)
     text = re.sub(r"[^a-z\s]", "", text)
     text = re.sub(r'\s+', ' ', text).strip()
     return text
+
+def pad_sequences_numpy(sequences, maxlen, padding='post'):
+    """Lightweight replacement for tensorflow.keras.utils.pad_sequences"""
+    padded = np.zeros((len(sequences), maxlen), dtype='float32')
+    for i, seq in enumerate(sequences):
+        if not seq: continue
+        trunc = seq[:maxlen]
+        if padding == 'post':
+            padded[i, :len(trunc)] = trunc
+        else:
+            padded[i, -len(trunc):] = trunc
+    return padded
+
+@app.route('/')
+def home():
+    return render_template('index.html')
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -41,14 +57,17 @@ def predict():
     # 1. Preprocess
     cleaned = clean_text(raw_text)
     
-    # 2. Tokenize & Pad
+    # 2. Tokenize
     seq = tokenizer.texts_to_sequences([cleaned])
-    padded = pad_sequences(seq, maxlen=MAX_LEN, padding='post')
-
-    # 3. Predict
-    prediction = model.predict(padded)[0][0]
     
-    # 4. Interpret (Threshold 0.5)
+    # 3. Pad (Using NumPy instead of Keras)
+    padded = pad_sequences_numpy(seq, maxlen=MAX_LEN, padding='post')
+
+    # 4. Predict (Using ONNX Runtime)
+    # ONNX requires inputs as a dictionary
+    prediction = sess.run([output_name], {input_name: padded})[0][0][0]
+    
+    # 5. Interpret
     result = "OFFENSIVE/HATE" if prediction > 0.5 else "NON-OFFENSIVE"
     confidence = float(prediction) if prediction > 0.5 else float(1 - prediction)
 
@@ -60,4 +79,5 @@ def predict():
     })
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # Render assigns the PORT env var, but 5000 is default fallback
+    app.run(host='0.0.0.0', port=5000)
